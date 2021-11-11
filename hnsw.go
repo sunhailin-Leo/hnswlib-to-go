@@ -11,6 +11,7 @@ package hnswgo
 import "C"
 import (
 	"math"
+	"runtime"
 	"unsafe"
 )
 
@@ -21,6 +22,7 @@ type HNSW struct {
 	normalize bool
 }
 
+// New make a hnsw graph
 func New(dim, M, efConstruction, randSeed int, maxElements uint32, spaceType string) *HNSW {
 	var hnsw HNSW
 	hnsw.dim = dim
@@ -36,6 +38,7 @@ func New(dim, M, efConstruction, randSeed int, maxElements uint32, spaceType str
 	return &hnsw
 }
 
+// Load load a hnsw graph
 func Load(location string, dim int, spaceType string) *HNSW {
 	var hnsw HNSW
 	hnsw.dim = dim
@@ -54,12 +57,30 @@ func Load(location string, dim int, spaceType string) *HNSW {
 	return &hnsw
 }
 
-func (h *HNSW) Save(location string) {
+// Unload TODO Test for release the graph memory
+func (h *HNSW) Unload() bool {
+	if h.index == nil {
+		return false
+	}
+	C.free(unsafe.Pointer(h.index))
+	h.index = nil
+	// Free memory ASAP, but need to check the memory usage
+	runtime.GC()
+	return true
+}
+
+// Save save graph node on graph
+func (h *HNSW) Save(location string) bool {
+	if h.index == nil {
+		return false
+	}
 	pLocation := C.CString(location)
 	C.saveHNSW(h.index, pLocation)
 	C.free(unsafe.Pointer(pLocation))
+	return true
 }
 
+// normalizeVector normalize vector
 func normalizeVector(vector []float32) []float32 {
 	var norm float32
 	for i := 0; i < len(vector); i++ {
@@ -72,14 +93,23 @@ func normalizeVector(vector []float32) []float32 {
 	return vector
 }
 
-func (h *HNSW) AddPoint(vector []float32, label uint32) {
+// AddPoint add a point on graph
+func (h *HNSW) AddPoint(vector []float32, label uint32) bool {
+	if h.index == nil {
+		return false
+	}
 	if h.normalize {
 		vector = normalizeVector(vector)
 	}
 	C.addPoint(h.index, (*C.float)(unsafe.Pointer(&vector[0])), C.ulong(label))
+	return true
 }
 
+// SearchKNN search points on graph with knn-algorithm
 func (h *HNSW) SearchKNN(vector []float32, N int) ([]uint32, []float32) {
+	if h.index == nil {
+		return nil, nil
+	}
 	Clabel := make([]C.ulong, N, N)
 	Cdist := make([]C.float, N, N)
 	if h.normalize {
@@ -95,6 +125,10 @@ func (h *HNSW) SearchKNN(vector []float32, N int) ([]uint32, []float32) {
 	return labels[:numResult], dists[:numResult]
 }
 
+// SetEf set ef argument on graph
 func (h *HNSW) SetEf(ef int) {
+	if h.index == nil {
+		return
+	}
 	C.setEf(h.index, C.int(ef))
 }

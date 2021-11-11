@@ -5,6 +5,10 @@ Hnswlib to go. Golang interface to hnswlib(https://github.com/nmslib/hnswlib). T
 
 ### Version
 
+* version 1.0.1
+  * Code format
+  * Add an api support unload the graph(Experimental)
+
 * version 1.0.0
     * hnswlib compatible version 0.5.2.
 
