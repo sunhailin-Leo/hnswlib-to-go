@@ -42,13 +42,14 @@ func randVector(dim int) []float32 {
 	return vec
 }
 
-func main() {
-	var dim, M, ef int = 128, 32, 300
+// 单个写入
+func exampleAddPoint(indexFileName string) {
+	var dim, M, ef = 128, 32, 300
 	// 最大的 elements 数
-	var maxElements uint32 = 50000
+	var maxElements uint32 = 10000
 	// 定义距离 cosine
-	var spaceType, indexLocation string = "cosine", "hnsw_demo_index.bin"
-	var randomSeed int = 100
+	var spaceType = "cosine"
+	var randomSeed = 100
 	fmt.Println("Before Create HNSW")
 	traceMemStats()
 	// Init new index
@@ -61,8 +62,43 @@ func main() {
 		}
 		h.AddPoint(randVector(dim), i)
 	}
-	h.Save(indexLocation)
-	h = hnswgo.Load(indexLocation, dim, spaceType)
+	h.Save(indexFileName)
+}
+
+// 批量写入
+func exampleBatchAddPoint(indexFileName string) {
+	var dim, M, ef = 128, 32, 300
+
+	// 最大的 elements 数
+	var maxElements uint32 = 20000
+
+	// 定义距离 cosine
+	var spaceType = "cosine"
+	var randomSeed = 100
+	fmt.Println("Before Create HNSW")
+
+	// 初始化 Init new index
+	h := hnswgo.New(dim, M, ef, randomSeed, maxElements, spaceType)
+
+	vectorList := make([][]float32, maxElements)
+	ids := make([]uint32, maxElements)
+	var i uint32
+	for ; i < maxElements; i++ {
+		if i%1000 == 0 {
+			fmt.Println(i)
+		}
+		vectorList[i] = randVector(dim)
+		ids[i] = i
+	}
+	h.AddBatchPoints(vectorList, ids, 10)
+
+	// 保存索引 Save Index
+	h.Save(indexFileName)
+}
+
+// 读取
+func exampleLoadIndex(indexFileName, spaceType string, dim int) {
+	h := hnswgo.Load(indexFileName, dim, spaceType)
 	// Search vector with maximum 5 NN
 	h.SetEf(15)
 	searchVector := randVector(dim)
@@ -73,10 +109,36 @@ func main() {
 	fmt.Println(endTime - startTime)
 	fmt.Println(labels, vectors)
 
+	// Test ResizeIndex API
+	isResize := h.ResizeIndex(12000)
+	fmt.Println("Size flag: ", isResize)
+
+	// Test Mark API
+	isMarkDelete := h.MarkDelete(10)
+	fmt.Println("isMarkDelete: ", isMarkDelete)
+
+	labelIsDelete := h.GetLabelIsMarkedDeleted(10)
+	fmt.Println("labelIsDelete: ", labelIsDelete)
+
+	isUnmarkDelete := h.UnmarkDelete(10)
+	fmt.Println("isUnmarkDelete: ", isUnmarkDelete)
+
+	// Test Unload API
 	fmt.Println("Before Unload")
 	traceMemStats()
 	h.Unload()
 	fmt.Println("After Unload")
 	traceMemStats()
+}
 
+func main() {
+	// 单条写入 add index point by point
+	exampleAddPoint("hnsw_demo_single.bin")
+	// 测试读取 test loading
+	exampleLoadIndex("hnsw_demo_single.bin", "cosine", 128)
+
+	// 批量写入 add index with batch mode
+	//exampleBatchAddPoint("hnsw_demo_multiple.bin")
+	// 测试读取 test loading
+	//exampleLoadIndex("hnsw_demo_multiple.bin", "cosine", 128)
 }

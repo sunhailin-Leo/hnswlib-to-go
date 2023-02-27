@@ -1,4 +1,5 @@
 //hnsw_wrapper.cpp
+#include <vector>
 #include <iostream>
 #include "hnswlib/hnswlib.h"
 #include "hnsw_wrapper.h"
@@ -12,8 +13,9 @@ HNSW initHNSW(int dim, unsigned long int max_elements, int M, int ef_constructio
     } else {
         space = new hnswlib::L2Space(dim);
     }
-    hnswlib::HierarchicalNSW<float> *appr_alg = new hnswlib::HierarchicalNSW<float>(space, max_elements, M, ef_construction, rand_seed);
-    return (void*)appr_alg;
+    hnswlib::HierarchicalNSW<float> *appr_alg = new hnswlib::HierarchicalNSW<float>(space, max_elements, M,
+                                                                                    ef_construction, rand_seed);
+    return (void *) appr_alg;
 }
 
 HNSW loadHNSW(char *location, int dim, char stype) {
@@ -23,24 +25,25 @@ HNSW loadHNSW(char *location, int dim, char stype) {
     } else {
         space = new hnswlib::L2Space(dim);
     }
-    hnswlib::HierarchicalNSW<float> *appr_alg = new hnswlib::HierarchicalNSW<float>(space, std::string(location), false, 0);
-    return (void*)appr_alg;
+    hnswlib::HierarchicalNSW<float> *appr_alg = new hnswlib::HierarchicalNSW<float>(space, std::string(location), false,
+                                                                                    0);
+    return (void *) appr_alg;
 }
 
 HNSW saveHNSW(HNSW index, char *location) {
-    ((hnswlib::HierarchicalNSW<float>*)index)->saveIndex(location);
+    ((hnswlib::HierarchicalNSW<float> *) index)->saveIndex(location);
     return 0;
 }
 
 void addPoint(HNSW index, float *vec, unsigned long int label) {
-    ((hnswlib::HierarchicalNSW<float>*)index)->addPoint(vec, label);
+    ((hnswlib::HierarchicalNSW<float> *) index)->addPoint(vec, label);
 }
 
 int searchKnn(HNSW index, float *vec, int N, unsigned long int *label, float *dist) {
-    std::priority_queue<std::pair<float, hnswlib::labeltype>> gt;
+    std::priority_queue <std::pair<float, hnswlib::labeltype>> gt;
     try {
-        gt = ((hnswlib::HierarchicalNSW<float>*)index)->searchKnn(vec, N);
-    } catch (const std::exception& e) {
+        gt = ((hnswlib::HierarchicalNSW<float> *) index)->searchKnn(vec, N);
+    } catch (const std::exception &e) {
         return 0;
     }
 
@@ -48,13 +51,74 @@ int searchKnn(HNSW index, float *vec, int N, unsigned long int *label, float *di
     std::pair<float, hnswlib::labeltype> pair;
     for (int i = n - 1; i >= 0; i--) {
         pair = gt.top();
-        *(dist+i) = pair.first;
-        *(label+i) = pair.second;
+        *(dist + i) = pair.first;
+        *(label + i) = pair.second;
         gt.pop();
     }
     return n;
 }
 
 void setEf(HNSW index, int ef) {
-    ((hnswlib::HierarchicalNSW<float>*)index)->ef_ = ef;
+    ((hnswlib::HierarchicalNSW<float> *) index)->ef_ = ef;
 }
+
+bool resizeIndex(HNSW index, unsigned long int new_max_elements) {
+    if (new_max_elements < ((hnswlib::HierarchicalNSW<float> *) index)->getCurrentElementCount()) {
+        return false;
+    }
+    try {
+        ((hnswlib::HierarchicalNSW<float> *) index)->resizeIndex(new_max_elements);
+    } catch (const std::exception &e) {
+        return false;
+    }
+    return true;
+}
+
+bool markDelete(HNSW index, unsigned long int label) {
+    try {
+        ((hnswlib::HierarchicalNSW<float> *) index)->markDelete(label);
+        return true;
+    } catch (const std::exception &e) {
+        return false;
+    }
+}
+
+bool unmarkDelete(HNSW index, unsigned long int label) {
+    try {
+        ((hnswlib::HierarchicalNSW<float> *) index)->unmarkDelete(label);
+        return true;
+    } catch (const std::exception &e) {
+        return false;
+    }
+}
+
+bool isMarkedDeleted(HNSW index, unsigned long int label) {
+    std::unique_lock <std::mutex> lock_table(((hnswlib::HierarchicalNSW<float> *) index)->label_lookup_lock);
+    auto search = ((hnswlib::HierarchicalNSW<float> *) index)->label_lookup_.find(label);
+
+    if (search != ((hnswlib::HierarchicalNSW<float> *) index)->label_lookup_.end()) {
+        bool res = ((hnswlib::HierarchicalNSW<float> *) index)->isMarkedDeleted(search->second);
+        lock_table.unlock();
+        return res;
+    }
+    return false;
+}
+
+bool updatePoint(HNSW index, float *vec, unsigned long int label) {
+    std::unique_lock <std::mutex> lock_table(((hnswlib::HierarchicalNSW<float> *) index)->label_lookup_lock);
+    auto search = ((hnswlib::HierarchicalNSW<float> *) index)->label_lookup_.find(label);
+
+    if (search != ((hnswlib::HierarchicalNSW<float> *) index)->label_lookup_.end()) {
+        hnswlib::tableint existingInternalId = search->second;
+        lock_table.unlock();
+        // const void *dataPoint, tableint internalId, float updateNeighborProbability
+        ((hnswlib::HierarchicalNSW<float> *) index)->updatePoint(vec, existingInternalId, 1.0);
+        return true;
+    }
+    return false;
+}
+
+// TODO
+//std::vector<float> getDataByLabel(HNSW index, unsigned long int label) {
+//    return ((hnswlib::HierarchicalNSW<float>*)index)->getDataByLabel<float>(label);
+//}

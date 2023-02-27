@@ -1,3 +1,3 @@
 module github.com/sunhailin-Leo/hnswlib-to-go
 
-go 1.15
+go 1.18

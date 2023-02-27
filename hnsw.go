@@ -2,16 +2,23 @@ package hnswgo
 
 // #cgo LDFLAGS: -L${SRCDIR} -lhnsw -lm
 // #include <stdlib.h>
+// #include <stdbool.h>
 // #include "hnsw_wrapper.h"
 // HNSW initHNSW(int dim, unsigned long int max_elements, int M, int ef_construction, int rand_seed, char stype);
 // HNSW loadHNSW(char *location, int dim, char stype);
 // void addPoint(HNSW index, float *vec, unsigned long int label);
 // int searchKnn(HNSW index, float *vec, int N, unsigned long int *label, float *dist);
 // void setEf(HNSW index, int ef);
+// bool resizeIndex(HNSW index, unsigned long int new_max_elements);
+// bool markDelete(HNSW index, unsigned long int label);
+// bool unmarkDelete(HNSW index, unsigned long int label);
+// bool isMarkedDeleted(HNSW index, unsigned long int label);
+// bool updatePoint(HNSW index, float *vec, unsigned long int label);
 import "C"
 import (
 	"math"
 	"runtime"
+	"sync"
 	"unsafe"
 )
 
@@ -105,6 +112,33 @@ func (h *HNSW) AddPoint(vector []float32, label uint32) bool {
 	return true
 }
 
+// AddBatchPoints add some points on graph with goroutine
+func (h *HNSW) AddBatchPoints(vectors [][]float32, labels []uint32, coroutines int) bool {
+	if len(vectors) != len(labels) {
+		return false
+	}
+
+	b := len(vectors) / coroutines
+	var wg sync.WaitGroup
+	for i := 0; i < coroutines; i++ {
+		wg.Add(1)
+
+		end := (i + 1) * b
+		if i == coroutines-1 && len(vectors) > end {
+			end = len(vectors)
+		}
+		go func(thisVectors [][]float32, thisLabels []uint32) {
+			defer wg.Done()
+			for j := 0; j < len(thisVectors); j++ {
+				h.AddPoint(thisVectors[j], thisLabels[j])
+			}
+		}(vectors[i*b:end], labels[i*b:end])
+	}
+
+	wg.Wait()
+	return true
+}
+
 // SearchKNN search points on graph with knn-algorithm
 func (h *HNSW) SearchKNN(vector []float32, N int) ([]uint32, []float32) {
 	if h.index == nil {
@@ -125,10 +159,68 @@ func (h *HNSW) SearchKNN(vector []float32, N int) ([]uint32, []float32) {
 	return labels[:numResult], dists[:numResult]
 }
 
+func (h *HNSW) SearchBatchKNN(vectors [][]float32, N, coroutines int) ([][]uint32, [][]float32) {
+	var lock sync.Mutex
+	labelList := make([][]uint32, len(vectors))
+	distList := make([][]float32, len(vectors))
+
+	b := len(vectors) / coroutines
+	var wg sync.WaitGroup
+	for i := 0; i < coroutines; i++ {
+		wg.Add(1)
+
+		end := (i + 1) * b
+		if i == coroutines-1 && len(vectors) > end {
+			end = len(vectors)
+		}
+		go func(i int) {
+			defer wg.Done()
+			for j := i * b; j < end; j++ {
+				labels, dist := h.SearchKNN(vectors[j], N)
+				lock.Lock()
+				labelList[j] = labels
+				distList[j] = dist
+				lock.Unlock()
+			}
+		}(i)
+	}
+	wg.Wait()
+	return labelList, distList
+}
+
 // SetEf set ef argument on graph
 func (h *HNSW) SetEf(ef int) {
 	if h.index == nil {
 		return
 	}
 	C.setEf(h.index, C.int(ef))
+}
+
+// SetNormalize set normalize on graph
+func (h *HNSW) SetNormalize(isNeedNormalize bool) {
+	h.normalize = isNeedNormalize
+}
+
+// ResizeIndex set new elements count to resize index
+func (h *HNSW) ResizeIndex(newMaxElements uint32) bool {
+	isResize := bool(C.resizeIndex(h.index, C.ulong(newMaxElements)))
+	return isResize
+}
+
+// MarkDelete mark a label to delete mode
+func (h *HNSW) MarkDelete(label uint32) bool {
+	isMark := bool(C.markDelete(h.index, C.ulong(label)))
+	return isMark
+}
+
+// UnmarkDelete unmark a label to delete mode
+func (h *HNSW) UnmarkDelete(label uint32) bool {
+	isUnmark := bool(C.unmarkDelete(h.index, C.ulong(label)))
+	return isUnmark
+}
+
+// GetLabelIsMarkedDeleted get label isDelete
+func (h *HNSW) GetLabelIsMarkedDeleted(label uint32) bool {
+	isDelete := bool(C.isMarkedDeleted(h.index, C.ulong(label)))
+	return isDelete
 }

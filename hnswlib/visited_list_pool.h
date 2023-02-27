@@ -2,6 +2,7 @@
 
 #include <mutex>
 #include <string.h>
+#include <deque>
 
 namespace hnswlib {
     typedef unsigned short int vl_type;
@@ -24,7 +25,7 @@ namespace hnswlib {
                 memset(mass, 0, sizeof(vl_type) * numelements);
                 curV++;
             }
-        };
+        }
 
         ~VisitedList() { delete[] mass; }
     };
@@ -59,12 +60,12 @@ namespace hnswlib {
             }
             rez->reset();
             return rez;
-        };
+        }
 
         void releaseVisitedList(VisitedList *vl) {
             std::unique_lock <std::mutex> lock(poolguard);
             pool.push_front(vl);
-        };
+        }
 
         ~VisitedListPool() {
             while (pool.size()) {
@@ -72,7 +73,6 @@ namespace hnswlib {
                 pool.pop_front();
                 delete rez;
             }
-        };
+        }
     };
-}
-
+}  // namespace hnswlib
