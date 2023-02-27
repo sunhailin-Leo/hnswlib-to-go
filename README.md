@@ -6,6 +6,9 @@ Hnswlib to go. Golang interface to hnswlib(https://github.com/nmslib/hnswlib). T
 
 ### Version
 
+* version 1.0.3
+  * Add `GetMaxElements`, `GetCurrentElementCount`, `GetDeleteCount`, `GetVectorByLabel` APIs
+
 * version 1.0.2
   * Update hnswlib compatible version to 0.7.0
   * Add `AddBatchPoints`, `SearchBatchKNN`, `SetNormalize`, `ResizeIndex`, `MarkDelete`, `UnmarkDelete`, `GetLabelIsMarkedDeleted` API

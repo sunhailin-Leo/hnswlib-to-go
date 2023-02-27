@@ -118,7 +118,30 @@ bool updatePoint(HNSW index, float *vec, unsigned long int label) {
     return false;
 }
 
-// TODO
-//std::vector<float> getDataByLabel(HNSW index, unsigned long int label) {
-//    return ((hnswlib::HierarchicalNSW<float>*)index)->getDataByLabel<float>(label);
-//}
+void getDataByLabel(HNSW index, unsigned long int label, float* out_data) {
+    auto data = ((hnswlib::HierarchicalNSW<float>*)index)->getDataByLabel<float>(label);
+    std::vector<float>* vec = new std::vector<float>(data.begin(), data.end());
+    if (vec == nullptr) {
+        return;
+    }
+
+    size_t size = vec->size();
+    for (size_t i = 0; i < size; i++) {
+        out_data[i] = (*vec)[i];
+    }
+
+    delete vec;
+}
+
+int getMaxElements(HNSW index) {
+    return ((hnswlib::HierarchicalNSW<float> *) index)->getMaxElements();
+}
+
+int getCurrentElementCount(HNSW index) {
+    return ((hnswlib::HierarchicalNSW<float> *) index)->getCurrentElementCount();
+}
+
+int getDeleteCount(HNSW index) {
+    return ((hnswlib::HierarchicalNSW<float> *) index)->getDeletedCount();
+}
+

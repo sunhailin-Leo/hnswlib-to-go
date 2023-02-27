@@ -1,19 +1,27 @@
 package hnswgo
 
-// #cgo LDFLAGS: -L${SRCDIR} -lhnsw -lm
-// #include <stdlib.h>
-// #include <stdbool.h>
-// #include "hnsw_wrapper.h"
-// HNSW initHNSW(int dim, unsigned long int max_elements, int M, int ef_construction, int rand_seed, char stype);
-// HNSW loadHNSW(char *location, int dim, char stype);
-// void addPoint(HNSW index, float *vec, unsigned long int label);
-// int searchKnn(HNSW index, float *vec, int N, unsigned long int *label, float *dist);
-// void setEf(HNSW index, int ef);
-// bool resizeIndex(HNSW index, unsigned long int new_max_elements);
-// bool markDelete(HNSW index, unsigned long int label);
-// bool unmarkDelete(HNSW index, unsigned long int label);
-// bool isMarkedDeleted(HNSW index, unsigned long int label);
-// bool updatePoint(HNSW index, float *vec, unsigned long int label);
+import "C"
+
+/*
+#cgo CXXFLAGS: -std=c++11
+#cgo LDFLAGS: -L${SRCDIR} -lhnsw -lm
+#include <stdlib.h>
+#include <stdbool.h>
+#include "hnsw_wrapper.h"
+
+HNSW initHNSW(int dim, unsigned long int max_elements, int M, int ef_construction, int rand_seed, char stype);
+HNSW loadHNSW(char *location, int dim, char stype);
+void addPoint(HNSW index, float *vec, unsigned long int label);
+int searchKnn(HNSW index, float *vec, int N, unsigned long int *label, float *dist);
+void setEf(HNSW index, int ef);
+bool resizeIndex(HNSW index, unsigned long int new_max_elements);
+bool markDelete(HNSW index, unsigned long int label);
+bool unmarkDelete(HNSW index, unsigned long int label);
+bool isMarkedDeleted(HNSW index, unsigned long int label);
+bool updatePoint(HNSW index, float *vec, unsigned long int label);
+
+void getDataByLabel(HNSW index, unsigned long int label, float* out_data);
+*/
 import "C"
 import (
 	"math"
@@ -21,6 +29,13 @@ import (
 	"sync"
 	"unsafe"
 )
+
+func toSlice(v *C.float, len int) []float32 {
+	// 创建一个指向C数组的slice
+	slice := (*[1 << 30]float32)(unsafe.Pointer(v))[:len:len]
+	// 复制slice的值，将其转换为一个新的Go切片
+	return append([]float32(nil), slice...)
+}
 
 type HNSW struct {
 	index     C.HNSW
@@ -223,4 +238,33 @@ func (h *HNSW) UnmarkDelete(label uint32) bool {
 func (h *HNSW) GetLabelIsMarkedDeleted(label uint32) bool {
 	isDelete := bool(C.isMarkedDeleted(h.index, C.ulong(label)))
 	return isDelete
+}
+
+// GetMaxElements get index max elements
+func (h *HNSW) GetMaxElements() int {
+	maxElements := int(C.getMaxElements(h.index))
+	return maxElements
+}
+
+// GetCurrentElementCount get index current elements
+func (h *HNSW) GetCurrentElementCount() int {
+	elementCnt := int(C.getCurrentElementCount(h.index))
+	return elementCnt
+}
+
+// GetDeleteCount get index count which mark deleted
+func (h *HNSW) GetDeleteCount() int {
+	deleteElementCnt := int(C.getDeleteCount(h.index))
+	return deleteElementCnt
+}
+
+// GetVectorByLabel get index by label
+func (h *HNSW) GetVectorByLabel(label uint32, dim int) []float32 {
+	var outDataPtr C.float
+	C.getDataByLabel(h.index, C.ulong(label), &outDataPtr)
+	outData := make([]float32, dim)
+	for i := 0; i < dim; i++ {
+		outData[i] = float32(*(*C.float)(unsafe.Pointer(uintptr(unsafe.Pointer(&outDataPtr)) + uintptr(i)*unsafe.Sizeof(C.float(0)))))
+	}
+	return outData
 }

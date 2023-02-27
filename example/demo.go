@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"runtime"
 	"time"
 
@@ -43,26 +44,35 @@ func randVector(dim int) []float32 {
 }
 
 // 单个写入
-func exampleAddPoint(indexFileName string) {
+func exampleAddPoint(indexFileName string) []float32 {
 	var dim, M, ef = 128, 32, 300
 	// 最大的 elements 数
-	var maxElements uint32 = 10000
+	var maxElements uint32 = 100
 	// 定义距离 cosine
 	var spaceType = "cosine"
-	var randomSeed = 100
+	var randomSeed = 2000
 	fmt.Println("Before Create HNSW")
 	traceMemStats()
 	// Init new index
 	h := hnswgo.New(dim, M, ef, randomSeed, maxElements, spaceType)
+
+	// randomIndex to test the api GetVectorByLabel
+	var randomIndex []float32
+
 	// Insert 1000 vectors to index. Label Type is uint32
 	var i uint32
 	for ; i < maxElements; i++ {
 		if i%1000 == 0 {
 			fmt.Println(i)
 		}
-		h.AddPoint(randVector(dim), i)
+		randVec := randVector(dim)
+		h.AddPoint(randVec, i)
+		if i == 0 {
+			randomIndex = randVec
+		}
 	}
 	h.Save(indexFileName)
+	return randomIndex
 }
 
 // 批量写入
@@ -97,7 +107,7 @@ func exampleBatchAddPoint(indexFileName string) {
 }
 
 // 读取
-func exampleLoadIndex(indexFileName, spaceType string, dim int) {
+func exampleLoadIndex(indexFileName, spaceType string, dim int) []float32 {
 	h := hnswgo.Load(indexFileName, dim, spaceType)
 	// Search vector with maximum 5 NN
 	h.SetEf(15)
@@ -109,9 +119,23 @@ func exampleLoadIndex(indexFileName, spaceType string, dim int) {
 	fmt.Println(endTime - startTime)
 	fmt.Println(labels, vectors)
 
+	// Test GetMaxElements API Before Resize
+	maxElementsBeforeResize := h.GetMaxElements()
+	currentElementsBeforeResize := h.GetCurrentElementCount()
+	fmt.Println("maxElements, currentElements(before resize): ", maxElementsBeforeResize, currentElementsBeforeResize)
+
 	// Test ResizeIndex API
 	isResize := h.ResizeIndex(12000)
 	fmt.Println("Size flag: ", isResize)
+
+	// Test GetMaxElements API After Resize
+	maxElementsAfterResize := h.GetMaxElements()
+	currentElementsAfterResize := h.GetCurrentElementCount()
+	fmt.Println("maxElements, currentElements(after resize): ", maxElementsAfterResize, currentElementsAfterResize)
+
+	// Test GetDeleteCount API
+	deleteCountBeforeDelete := h.GetDeleteCount()
+	fmt.Println("GetDeleteCount(before): ", deleteCountBeforeDelete)
 
 	// Test Mark API
 	isMarkDelete := h.MarkDelete(10)
@@ -120,8 +144,16 @@ func exampleLoadIndex(indexFileName, spaceType string, dim int) {
 	labelIsDelete := h.GetLabelIsMarkedDeleted(10)
 	fmt.Println("labelIsDelete: ", labelIsDelete)
 
+	// Test GetDeleteCount API
+	deleteCountBeforeAfter := h.GetDeleteCount()
+	fmt.Println("GetDeleteCount(after): ", deleteCountBeforeAfter)
+
 	isUnmarkDelete := h.UnmarkDelete(10)
 	fmt.Println("isUnmarkDelete: ", isUnmarkDelete)
+
+	// Test GetVectorByLabel API
+	getVectorByIdRes := h.GetVectorByLabel(0, dim)
+	fmt.Println("Vector: ", getVectorByIdRes)
 
 	// Test Unload API
 	fmt.Println("Before Unload")
@@ -129,16 +161,21 @@ func exampleLoadIndex(indexFileName, spaceType string, dim int) {
 	h.Unload()
 	fmt.Println("After Unload")
 	traceMemStats()
+
+	return getVectorByIdRes
 }
 
 func main() {
 	// 单条写入 add index point by point
-	exampleAddPoint("hnsw_demo_single.bin")
+	demoVector := exampleAddPoint("hnsw_demo_single.bin")
 	// 测试读取 test loading
-	exampleLoadIndex("hnsw_demo_single.bin", "cosine", 128)
+	demoSearchVector := exampleLoadIndex("hnsw_demo_single.bin", "cosine", 128)
+	// test GetVectorByLabel API
+	isEqual := reflect.DeepEqual(demoVector, demoSearchVector)
+	fmt.Println("GetVectorByLabel return data is equal: ", isEqual)
 
 	// 批量写入 add index with batch mode
-	//exampleBatchAddPoint("hnsw_demo_multiple.bin")
+	exampleBatchAddPoint("hnsw_demo_multiple.bin")
 	// 测试读取 test loading
-	//exampleLoadIndex("hnsw_demo_multiple.bin", "cosine", 128)
+	exampleLoadIndex("hnsw_demo_multiple.bin", "cosine", 128)
 }

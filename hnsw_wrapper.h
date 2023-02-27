@@ -26,6 +26,13 @@ bool isMarkedDeleted(HNSW index, unsigned long int label);
 
 bool updatePoint(HNSW index, float *vec, unsigned long int label);
 
+int getMaxElements(HNSW index);
+
+int getCurrentElementCount(HNSW index);
+
+int getDeleteCount(HNSW index);
+
+void getDataByLabel(HNSW index, unsigned long int label, float* out_data);
 #ifdef __cplusplus
 }
 #endif
