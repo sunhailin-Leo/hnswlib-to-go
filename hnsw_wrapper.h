@@ -24,7 +24,7 @@ bool unmarkDelete(HNSW index, unsigned long int label);
 
 bool isMarkedDeleted(HNSW index, unsigned long int label);
 
-bool updatePoint(HNSW index, float *vec, unsigned long int label);
+bool updatePoint(HNSW index, float *vec, unsigned long int label, float updateNeighborProbability);
 
 int getMaxElements(HNSW index);
 

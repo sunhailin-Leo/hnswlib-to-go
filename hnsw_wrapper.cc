@@ -104,7 +104,7 @@ bool isMarkedDeleted(HNSW index, unsigned long int label) {
     return false;
 }
 
-bool updatePoint(HNSW index, float *vec, unsigned long int label) {
+bool updatePoint(HNSW index, float *vec, unsigned long int label, float updateNeighborProbability) {
     std::unique_lock <std::mutex> lock_table(((hnswlib::HierarchicalNSW<float> *) index)->label_lookup_lock);
     auto search = ((hnswlib::HierarchicalNSW<float> *) index)->label_lookup_.find(label);
 
@@ -112,7 +112,7 @@ bool updatePoint(HNSW index, float *vec, unsigned long int label) {
         hnswlib::tableint existingInternalId = search->second;
         lock_table.unlock();
         // const void *dataPoint, tableint internalId, float updateNeighborProbability
-        ((hnswlib::HierarchicalNSW<float> *) index)->updatePoint(vec, existingInternalId, 1.0);
+        ((hnswlib::HierarchicalNSW<float> *) index)->updatePoint(vec, existingInternalId, updateNeighborProbability);
         return true;
     }
     return false;
@@ -121,9 +121,6 @@ bool updatePoint(HNSW index, float *vec, unsigned long int label) {
 void getDataByLabel(HNSW index, unsigned long int label, float* out_data) {
     auto data = ((hnswlib::HierarchicalNSW<float>*)index)->getDataByLabel<float>(label);
     std::vector<float>* vec = new std::vector<float>(data.begin(), data.end());
-    if (vec == nullptr) {
-        return;
-    }
 
     size_t size = vec->size();
     for (size_t i = 0; i < size; i++) {

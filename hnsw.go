@@ -18,7 +18,7 @@ bool resizeIndex(HNSW index, unsigned long int new_max_elements);
 bool markDelete(HNSW index, unsigned long int label);
 bool unmarkDelete(HNSW index, unsigned long int label);
 bool isMarkedDeleted(HNSW index, unsigned long int label);
-bool updatePoint(HNSW index, float *vec, unsigned long int label);
+bool updatePoint(HNSW index, float *vec, unsigned long int label, float updateNeighborProbability);
 
 void getDataByLabel(HNSW index, unsigned long int label, float* out_data);
 */
@@ -29,13 +29,6 @@ import (
 	"sync"
 	"unsafe"
 )
-
-func toSlice(v *C.float, len int) []float32 {
-	// 创建一个指向C数组的slice
-	slice := (*[1 << 30]float32)(unsafe.Pointer(v))[:len:len]
-	// 复制slice的值，将其转换为一个新的Go切片
-	return append([]float32(nil), slice...)
-}
 
 type HNSW struct {
 	index     C.HNSW
@@ -79,7 +72,7 @@ func Load(location string, dim int, spaceType string) *HNSW {
 	return &hnsw
 }
 
-// Unload TODO Test for release the graph memory
+// Unload release the graph memory
 func (h *HNSW) Unload() bool {
 	if h.index == nil {
 		return false
@@ -129,7 +122,7 @@ func (h *HNSW) AddPoint(vector []float32, label uint32) bool {
 
 // AddBatchPoints add some points on graph with goroutine
 func (h *HNSW) AddBatchPoints(vectors [][]float32, labels []uint32, coroutines int) bool {
-	if len(vectors) != len(labels) {
+	if len(vectors) != len(labels) || coroutines < 1 {
 		return false
 	}
 
@@ -174,7 +167,12 @@ func (h *HNSW) SearchKNN(vector []float32, N int) ([]uint32, []float32) {
 	return labels[:numResult], dists[:numResult]
 }
 
+// SearchBatchKNN search multiple points on graph with knn-algorithm
 func (h *HNSW) SearchBatchKNN(vectors [][]float32, N, coroutines int) ([][]uint32, [][]float32) {
+	if coroutines < 1 {
+		coroutines = 1
+	}
+
 	var lock sync.Mutex
 	labelList := make([][]uint32, len(vectors))
 	distList := make([][]float32, len(vectors))
@@ -238,6 +236,39 @@ func (h *HNSW) UnmarkDelete(label uint32) bool {
 func (h *HNSW) GetLabelIsMarkedDeleted(label uint32) bool {
 	isDelete := bool(C.isMarkedDeleted(h.index, C.ulong(label)))
 	return isDelete
+}
+
+// UpdatePoint update point on graph
+func (h *HNSW) UpdatePoint(vector []float32, label uint32, updateNeighborProbability float32) bool {
+	isUpdate := bool(C.updatePoint(h.index, (*C.float)(unsafe.Pointer(&vector[0])), C.ulong(label), C.float(updateNeighborProbability)))
+	return isUpdate
+}
+
+// UpdateBatchPoints update points on graph
+func (h *HNSW) UpdateBatchPoints(vectors [][]float32, labels []uint32, updateNeighborProbabilities []float32, coroutines int) bool {
+	if len(vectors) != len(labels) && len(labels) != len(updateNeighborProbabilities) || coroutines < 1 {
+		return false
+	}
+
+	b := len(vectors) / coroutines
+	var wg sync.WaitGroup
+	for i := 0; i < coroutines; i++ {
+		wg.Add(1)
+
+		end := (i + 1) * b
+		if i == coroutines-1 && len(vectors) > end {
+			end = len(vectors)
+		}
+		go func(thisVectors [][]float32, thisLabels []uint32, thisProb []float32) {
+			defer wg.Done()
+			for j := 0; j < len(thisVectors); j++ {
+				h.UpdatePoint(thisVectors[j], thisLabels[j], thisProb[j])
+			}
+		}(vectors[i*b:end], labels[i*b:end], updateNeighborProbabilities[i*b:end])
+	}
+
+	wg.Wait()
+	return true
 }
 
 // GetMaxElements get index max elements
