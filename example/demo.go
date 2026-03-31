@@ -152,7 +152,7 @@ func exampleLoadIndex(indexFileName, spaceType string, dim int) []float32 {
 	fmt.Println("isUnmarkDelete: ", isUnmarkDelete)
 
 	// Test GetVectorByLabel API
-	getVectorByIdRes := h.GetVectorByLabel(0, dim)
+	getVectorByIdRes := h.GetVectorByLabel(0)
 	fmt.Println("Vector: ", getVectorByIdRes)
 
 	// Test Unload API

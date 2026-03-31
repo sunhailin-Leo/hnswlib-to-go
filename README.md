@@ -1,51 +1,190 @@
 # hnswlib-to-go
-Hnswlib to go. Golang interface to hnswlib(https://github.com/nmslib/hnswlib). This is a golang interface of [hnswlib](https://github.com/nmslib/hnswlib). For more information, please follow [hnswlib](https://github.com/nmslib/hnswlib) and [Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs.](https://arxiv.org/abs/1603.09320).
 
-**But in this project, we make compatible hnswlib to 0.7.0.**
+[![CI](https://github.com/sunhailin-Leo/hnswlib-to-go/actions/workflows/ci.yml/badge.svg)](https://github.com/sunhailin-Leo/hnswlib-to-go/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/sunhailin-Leo/hnswlib-to-go.svg)](https://pkg.go.dev/github.com/sunhailin-Leo/hnswlib-to-go)
 
+Go bindings for [hnswlib](https://github.com/nmslib/hnswlib) — a fast approximate nearest neighbor search library based on [Hierarchical Navigable Small World graphs](https://arxiv.org/abs/1603.09320).
 
-### Version
+**hnswlib compatibility: synced with [hnswlib master](https://github.com/nmslib/hnswlib/tree/master/hnswlib).**
 
-* version 1.0.4
-  * Add `UpdatePoint`, `UpdateBatchPoints` APIs
+## Requirements
 
-* version 1.0.3
-  * Add `GetMaxElements`, `GetCurrentElementCount`, `GetDeleteCount`, `GetVectorByLabel` APIs
+- **Go** 1.21+
+- **C++ compiler** with C++11 support (g++ or clang++)
+- **Make**
 
-* version 1.0.2
-  * Update hnswlib compatible version to 0.7.0
-  * Add `AddBatchPoints`, `SearchBatchKNN`, `SetNormalize`, `ResizeIndex`, `MarkDelete`, `UnmarkDelete`, `GetLabelIsMarkedDeleted` API
+## Installation
 
-* version 1.0.1
-  * Code format
-  * Add an api support unload the graph(Experimental)
+```bash
+go get github.com/sunhailin-Leo/hnswlib-to-go
+```
 
-* version 1.0.0
-  * hnswlib compatible version 0.5.2.
+Before building your Go program, the C++ static library must be compiled:
 
+```bash
+cd $GOPATH/pkg/mod/github.com/sunhailin-Leo/hnswlib-to-go@<version>
+make build
+```
 
-### Build
+Or clone and build from source:
 
-* Linux/MacOS
-  * Build Golang Env
-  * `go mod init`
-  * `make`
+```bash
+git clone --recurse-submodules https://github.com/sunhailin-Leo/hnswlib-to-go.git
+cd hnswlib-to-go
+make build
+```
 
-### Usage
+## Quick Start
 
-* When building golang program, please add `export CGO_CXXFLAGS=-std=c++11` command before `go build / run / test ...`
+```go
+package main
 
-| argument       | type | |
-| -------------- | ---- | ----- |
-| dim            | int  | vector dimension |
-| M              | int  | see[ALGO_PARAMS.md](https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md) |
-| efConstruction | int  | see[ALGO_PARAMS.md](https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md) |
-| randomSeed     | int  | random seed for hnsw |
-| maxElements    | int  | max records in data |
-| spaceType      | str  | |
+import (
+	"fmt"
+	hnswgo "github.com/sunhailin-Leo/hnswlib-to-go"
+)
 
-| spaceType | distance          |
-| --------- |:-----------------:|
-| ip        | inner product     |
+func main() {
+	// Create a new index
+	//   dim=128, M=16, efConstruction=200, randomSeed=42, maxElements=10000
+	index := hnswgo.New(128, 16, 200, 42, 10000, hnswgo.SpaceL2)
+	defer index.Free()
+
+	// Set search-time ef parameter
+	index.SetEf(50)
+
+	// Add vectors
+	vector := make([]float32, 128)
+	for i := range vector {
+		vector[i] = float32(i) * 0.01
+	}
+	index.AddPoint(vector, 0)
+
+	// Search for nearest neighbors
+	labels, distances := index.SearchKNN(vector, 5)
+	fmt.Println("Labels:", labels)
+	fmt.Println("Distances:", distances)
+
+	// Save and load
+	index.Save("/tmp/my_index.bin")
+	loaded := hnswgo.Load("/tmp/my_index.bin", 128, hnswgo.SpaceL2)
+	defer loaded.Free()
+}
+```
+
+## API Reference
+
+### Index Creation
+
+| Function | Description |
+|----------|-------------|
+| `New(dim, M, efConstruction, randSeed, maxElements, spaceType)` | Create a new HNSW index |
+| `NewWithReplaceDeleted(dim, M, efConstruction, randSeed, maxElements, spaceType)` | Create index with replace-deleted support |
+| `Load(location, dim, spaceType)` | Load index from file |
+
+### Constructor Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `dim` | `int` | Vector dimension |
+| `M` | `int` | Max connections per layer (see [ALGO_PARAMS.md](https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md)) |
+| `efConstruction` | `int` | Construction-time ef parameter (see [ALGO_PARAMS.md](https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md)) |
+| `randSeed` | `int` | Random seed |
+| `maxElements` | `uint32` | Maximum number of elements |
+| `spaceType` | `string` | Distance metric (`"l2"`, `"ip"`, or `"cosine"`) |
+
+### Distance Metrics
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `SpaceL2` | `"l2"` | Euclidean (L2) distance |
+| `SpaceIP` | `"ip"` | Inner product distance |
+| `SpaceCosine` | `"cosine"` | Cosine similarity (auto-normalizes vectors) |
+
+### Data Operations
+
+| Method | Description |
+|--------|-------------|
+| `AddPoint(vector, label)` | Add a single vector |
+| `AddPointWithReplace(vector, label)` | Add vector, reusing deleted slots |
+| `AddBatchPoints(vectors, labels, coroutines)` | Add vectors concurrently |
+| `SearchKNN(vector, N)` | Search for N nearest neighbors |
+| `SearchBatchKNN(vectors, N, coroutines)` | Batch search concurrently |
+| `GetVectorByLabel(label)` | Retrieve stored vector by label |
+
+### Index Management
+
+| Method | Description |
+|--------|-------------|
+| `Save(location)` | Persist index to file |
+| `Free()` | Release index memory |
+| `SetEf(ef)` | Set search-time ef parameter |
+| `SetNormalize(bool)` | Enable/disable vector normalization |
+| `ResizeIndex(newMaxElements)` | Resize index capacity |
+
+### Delete & Update
+
+| Method | Description |
+|--------|-------------|
+| `MarkDelete(label)` | Soft-delete an element |
+| `UnmarkDelete(label)` | Restore a soft-deleted element |
+| `GetLabelIsMarkedDeleted(label)` | Check if element is deleted |
+| `UpdatePoint(vector, label, prob)` | Update vector for existing label |
+| `UpdateBatchPoints(vectors, labels, probs, coroutines)` | Batch update concurrently |
+
+### Index Info
+
+| Method | Description |
+|--------|-------------|
+| `GetMaxElements()` | Maximum capacity |
+| `GetCurrentElementCount()` | Current number of elements |
+| `GetDeleteCount()` | Number of soft-deleted elements |
+
+## Build Targets
+
+```bash
+make build              # Build C++ library and Go package
+make opt                # Build with -O3 and -march=native
+make portable           # Build without -march=native (CI-friendly)
+make test               # Run unit tests
+make bench              # Run benchmarks
+make clean              # Remove build artifacts
+make help               # Show all available targets
+```
+
+### Cross-Platform Builds
+
+Requires appropriate cross-compilation toolchains:
+
+```bash
+make build-linux-amd64   # Build for Linux x86_64
+make build-linux-arm64   # Build for Linux aarch64
+make build-darwin-amd64  # Build for macOS x86_64
+make build-darwin-arm64  # Build for macOS ARM64
+make build-windows-amd64 # Build for Windows x86_64 (MinGW)
+```
+
+### Windows Support
+
+Windows builds require [MSYS2](https://www.msys2.org/) with MinGW-w64:
+
+```bash
+# Install MSYS2, then in MINGW64 shell:
+pacman -S mingw-w64-x86_64-gcc make
+make build
+```
+
+## Version History
+
+- **v1.1.0** — Synced hnswlib to latest master; added `NewWithReplaceDeleted`, `AddPointWithReplace`, `Free`; nil-safety for all methods; comprehensive tests & benchmarks; multi-platform Makefile; GitHub Actions CI
+- **v1.0.4** — Added `UpdatePoint`, `UpdateBatchPoints`
+- **v1.0.3** — Added `GetMaxElements`, `GetCurrentElementCount`, `GetDeleteCount`, `GetVectorByLabel`
+- **v1.0.2** — Updated hnswlib to 0.7.0; added batch operations, delete/unmark, resize
+- **v1.0.1** — Code formatting; experimental `Unload` API
+- **v1.0.0** — Initial release (hnswlib 0.5.2)
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
 | cosine    | cosine similarity |
 | l2        | l2                |

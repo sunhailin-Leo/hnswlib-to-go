@@ -2,29 +2,35 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <stdbool.h>
+#include <stdint.h>
+
 typedef void *HNSW;
 
-HNSW initHNSW(int dim, unsigned long int max_elements, int M, int ef_construction, int rand_seed, char stype);
+HNSW initHNSW(int dim, uint64_t max_elements, int M, int ef_construction, int rand_seed, char stype, bool allow_replace_deleted);
 
 HNSW loadHNSW(char *location, int dim, char stype);
 
-HNSW saveHNSW(HNSW index, char *location);
+void freeHNSW(HNSW index, char stype);
 
-void addPoint(HNSW index, float *vec, unsigned long int label);
+void saveHNSW(HNSW index, char *location);
 
-int searchKnn(HNSW index, float *vec, int N, unsigned long int *label, float *dist);
+void addPoint(HNSW index, float *vec, uint64_t label, bool replace_deleted);
+
+int searchKnn(HNSW index, float *vec, int N, uint64_t *label, float *dist);
 
 void setEf(HNSW index, int ef);
 
-bool resizeIndex(HNSW index, unsigned long int new_max_elements);
+bool resizeIndex(HNSW index, uint64_t new_max_elements);
 
-bool markDelete(HNSW index, unsigned long int label);
+bool markDelete(HNSW index, uint64_t label);
 
-bool unmarkDelete(HNSW index, unsigned long int label);
+bool unmarkDelete(HNSW index, uint64_t label);
 
-bool isMarkedDeleted(HNSW index, unsigned long int label);
+bool isMarkedDeleted(HNSW index, uint64_t label);
 
-bool updatePoint(HNSW index, float *vec, unsigned long int label, float updateNeighborProbability);
+bool updatePoint(HNSW index, float *vec, uint64_t label, float updateNeighborProbability);
 
 int getMaxElements(HNSW index);
 
@@ -32,7 +38,8 @@ int getCurrentElementCount(HNSW index);
 
 int getDeleteCount(HNSW index);
 
-void getDataByLabel(HNSW index, unsigned long int label, float* out_data);
+int getDataByLabel(HNSW index, uint64_t label, float* out_data, int dim);
+
 #ifdef __cplusplus
 }
 #endif
