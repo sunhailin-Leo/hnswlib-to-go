@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  test:
+    name: Test (Go ${{ matrix.go }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ['1.21', '1.22', '1.23', '1.24', '1.25', '1.26']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      
+      - name: Install C++ compiler (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++
+      
+      - name: Install C++ compiler (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          clang++ --version
+      
+      - name: Build (portable, Unix)
+        if: runner.os != 'Windows'
+        run: make portable
+      
+      - name: Build (portable, Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          g++ -std=c++11 -I. -O2 -c hnsw_wrapper.cc
+          ar rcs libhnsw.a hnsw_wrapper.o
+          CGO_CXXFLAGS="-I. -std=c++11" go build
+      
+      - name: Run tests (Unix)
+        if: runner.os != 'Windows'
+        run: make test
+      
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          CGO_CXXFLAGS="-I. -std=c++11" go test -v -count=1 -timeout 120s ./...
+
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.23']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      
+      - name: Install C++ compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++
+      
+      - name: Build (portable)
+        run: make portable
+      
+      - name: Run benchmarks
+        run: make bench
