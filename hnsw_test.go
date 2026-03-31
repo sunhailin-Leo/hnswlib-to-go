@@ -187,7 +187,7 @@ func TestHNSW_SaveLoad(t *testing.T) {
 		t.Run(spaceType, func(t *testing.T) {
 			tempDir := os.TempDir()
 			tempFile := filepath.Join(tempDir, "hnsw_test_"+spaceType+".bin")
-			t.Cleanup(func() { os.Remove(tempFile) })
+			t.Cleanup(func() { _ = os.Remove(tempFile) })
 
 			// Create and populate index
 			hnsw := New(10, 16, 200, 42, 1000, spaceType)

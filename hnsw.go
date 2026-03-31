@@ -12,7 +12,6 @@ package hnswgo
 import "C"
 import (
 	"math"
-	"runtime"
 	"sync"
 	"unsafe"
 )
@@ -86,7 +85,6 @@ func (h *HNSW) Free() bool {
 	}
 	C.freeHNSW(h.index, spaceChar(h.spaceType))
 	h.index = nil
-	runtime.GC()
 	return true
 }
 
@@ -107,17 +105,16 @@ func (h *HNSW) Save(location string) bool {
 	return true
 }
 
-// normalizeVector normalize vector
-func normalizeVector(vector []float32) []float32 {
-	var norm float32
-	for i := 0; i < len(vector); i++ {
-		norm += vector[i] * vector[i]
+// normalizeVector normalizes a vector in-place to unit length.
+func normalizeVector(vector []float32) {
+	var squaredSum float32
+	for _, v := range vector {
+		squaredSum += v * v
 	}
-	norm = 1.0 / (float32(math.Sqrt(float64(norm))) + 1e-15)
-	for i := 0; i < len(vector); i++ {
-		vector[i] = vector[i] * norm
+	invNorm := float32(1.0 / (math.Sqrt(float64(squaredSum)) + 1e-15))
+	for i := range vector {
+		vector[i] *= invNorm
 	}
-	return vector
 }
 
 // AddPoint adds a point to the index.
@@ -126,7 +123,7 @@ func (h *HNSW) AddPoint(vector []float32, label uint32) bool {
 		return false
 	}
 	if h.normalize {
-		vector = normalizeVector(vector)
+		normalizeVector(vector)
 	}
 	C.addPoint(h.index, (*C.float)(unsafe.Pointer(&vector[0])), C.uint64_t(label), C.bool(false))
 	return true
@@ -139,7 +136,7 @@ func (h *HNSW) AddPointWithReplace(vector []float32, label uint32) bool {
 		return false
 	}
 	if h.normalize {
-		vector = normalizeVector(vector)
+		normalizeVector(vector)
 	}
 	C.addPoint(h.index, (*C.float)(unsafe.Pointer(&vector[0])), C.uint64_t(label), C.bool(true))
 	return true
@@ -172,55 +169,77 @@ func (h *HNSW) AddBatchPoints(vectors [][]float32, labels []uint32, coroutines i
 	return true
 }
 
-// SearchKNN search points on graph with knn-algorithm
+// searchBufferPool reuses C-type slices to reduce allocations in SearchKNN.
+var searchBufferPool = sync.Pool{
+	New: func() any {
+		return &searchBuffer{}
+	},
+}
+
+type searchBuffer struct {
+	labels []C.uint64_t
+	dists  []C.float
+}
+
+// SearchKNN searches for the N nearest neighbors of the given vector.
 func (h *HNSW) SearchKNN(vector []float32, N int) ([]uint32, []float32) {
 	if h.index == nil {
 		return nil, nil
 	}
-	Clabel := make([]C.uint64_t, N, N)
-	Cdist := make([]C.float, N, N)
 	if h.normalize {
-		vector = normalizeVector(vector)
+		normalizeVector(vector)
 	}
-	numResult := int(C.searchKnn(h.index, (*C.float)(unsafe.Pointer(&vector[0])), C.int(N), &Clabel[0], &Cdist[0]))
-	labels := make([]uint32, N)
-	dists := make([]float32, N)
+
+	buf := searchBufferPool.Get().(*searchBuffer)
+	if cap(buf.labels) < N {
+		buf.labels = make([]C.uint64_t, N)
+		buf.dists = make([]C.float, N)
+	} else {
+		buf.labels = buf.labels[:N]
+		buf.dists = buf.dists[:N]
+	}
+
+	numResult := int(C.searchKnn(h.index, (*C.float)(unsafe.Pointer(&vector[0])), C.int(N), &buf.labels[0], &buf.dists[0]))
+
+	labels := make([]uint32, numResult)
+	dists := make([]float32, numResult)
 	for i := 0; i < numResult; i++ {
-		labels[i] = uint32(Clabel[i])
-		dists[i] = float32(Cdist[i])
+		labels[i] = uint32(buf.labels[i])
+		dists[i] = float32(buf.dists[i])
 	}
-	return labels[:numResult], dists[:numResult]
+
+	searchBufferPool.Put(buf)
+	return labels, dists
 }
 
-// SearchBatchKNN search multiple points on graph with knn-algorithm
+// SearchBatchKNN searches for the N nearest neighbors of multiple vectors concurrently.
 func (h *HNSW) SearchBatchKNN(vectors [][]float32, N, coroutines int) ([][]uint32, [][]float32) {
+	totalVectors := len(vectors)
 	if coroutines < 1 {
 		coroutines = 1
 	}
+	if coroutines > totalVectors {
+		coroutines = totalVectors
+	}
 
-	var lock sync.Mutex
-	labelList := make([][]uint32, len(vectors))
-	distList := make([][]float32, len(vectors))
+	labelList := make([][]uint32, totalVectors)
+	distList := make([][]float32, totalVectors)
 
-	b := len(vectors) / coroutines
+	batchSize := totalVectors / coroutines
 	var wg sync.WaitGroup
 	for i := 0; i < coroutines; i++ {
-		wg.Add(1)
-
-		end := (i + 1) * b
-		if i == coroutines-1 && len(vectors) > end {
-			end = len(vectors)
+		start := i * batchSize
+		end := start + batchSize
+		if i == coroutines-1 {
+			end = totalVectors
 		}
-		go func(i int) {
+		wg.Add(1)
+		go func(start, end int) {
 			defer wg.Done()
-			for j := i * b; j < end; j++ {
-				labels, dist := h.SearchKNN(vectors[j], N)
-				lock.Lock()
-				labelList[j] = labels
-				distList[j] = dist
-				lock.Unlock()
+			for j := start; j < end; j++ {
+				labelList[j], distList[j] = h.SearchKNN(vectors[j], N)
 			}
-		}(i)
+		}(start, end)
 	}
 	wg.Wait()
 	return labelList, distList

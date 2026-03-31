@@ -195,6 +195,6 @@ func BenchmarkSaveLoad(b *testing.B) {
 		if hnsw != nil {
 			hnsw.Free()
 		}
-		os.Remove(tmpFile)
+		_ = os.Remove(tmpFile)
 	})
 }

@@ -174,9 +174,32 @@ pacman -S mingw-w64-x86_64-gcc make
 make build
 ```
 
+## Benchmarks
+
+Measured on Apple M3 Pro, Go 1.23, `-O3 -march=native`, dim=128, 5000 indexed vectors:
+
+| Benchmark | ns/op | B/op | allocs/op |
+|-----------|------:|-----:|----------:|
+| AddPoint (L2) | 1,805,974 | 512 | 1 |
+| AddPoint (Cosine) | 1,476,631 | 512 | 1 |
+| AddBatchPoints (1000×4 goroutines) | 2,949,077,675 | 454 | 9 |
+| SearchKNN (L2, top-10) | 119,831 | 96 | 2 |
+| SearchKNN (Cosine, top-10) | 89,467 | 96 | 2 |
+| SearchBatchKNN (100×4 goroutines) | 4,231,052 | 15,650 | 211 |
+| SaveLoad (5000 vectors) | 16,149,372 | 50 | 1 |
+
+Run benchmarks locally:
+
+```bash
+make opt    # Build with -O3 -march=native
+make bench  # Run all benchmarks
+```
+
 ## Version History
 
-- **v1.1.0** — Synced hnswlib to latest master; added `NewWithReplaceDeleted`, `AddPointWithReplace`, `Free`; nil-safety for all methods; comprehensive tests & benchmarks; multi-platform Makefile; GitHub Actions CI
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+
+- **v1.1.0** — Synced hnswlib to latest master; performance optimizations; Windows support; comprehensive tests & benchmarks; GitHub Actions CI (Go 1.21–1.26)
 - **v1.0.4** — Added `UpdatePoint`, `UpdateBatchPoints`
 - **v1.0.3** — Added `GetMaxElements`, `GetCurrentElementCount`, `GetDeleteCount`, `GetVectorByLabel`
 - **v1.0.2** — Updated hnswlib to 0.7.0; added batch operations, delete/unmark, resize
@@ -186,5 +209,3 @@ make build
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
-| cosine    | cosine similarity |
-| l2        | l2                |
