@@ -41,22 +41,17 @@ jobs:
         run: |
           clang++ --version
       
-      - name: Install MinGW (Windows)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: mingw-w64-x86_64-gcc make
-      
       - name: Build (portable, Unix)
         if: runner.os != 'Windows'
         run: make portable
       
       - name: Build (portable, Windows)
         if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: make portable
+        shell: bash
+        run: |
+          g++ -std=c++11 -I. -O2 -c hnsw_wrapper.cc
+          ar rcs libhnsw.a hnsw_wrapper.o
+          CGO_CXXFLAGS="-I. -std=c++11" go build
       
       - name: Run tests (Unix)
         if: runner.os != 'Windows'
@@ -64,8 +59,9 @@ jobs:
       
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: make test
+        shell: bash
+        run: |
+          CGO_CXXFLAGS="-I. -std=c++11" go test -v -count=1 -timeout 120s ./...
 
   benchmark:
     name: Benchmark
