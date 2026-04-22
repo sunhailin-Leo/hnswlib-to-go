@@ -1,3 +1,7 @@
 [submodule "hnswlib"]
 	path = hnswlib
 	url = https://github.com/nmslib/hnswlib.git
+[submodule "third_party/hnswlib"]
+	path = third_party/hnswlib
+	url = https://github.com/nmslib/hnswlib.git
+	branch = master
