@@ -1,7 +1,7 @@
 package hnswgo
 
 /*
-#cgo CXXFLAGS: -std=c++11
+#cgo CXXFLAGS: -std=c++11 -I${SRCDIR}/third_party/hnswlib
 #cgo !windows LDFLAGS: -L${SRCDIR} -lhnsw -lm -lstdc++
 #cgo windows LDFLAGS: -L${SRCDIR} -lhnsw -lstdc++
 #include <stdlib.h>

@@ -3,7 +3,7 @@
 
 CXX ?= c++
 AR  ?= ar
-INCLUDES = -I.
+INCLUDES = -I./third_party/hnswlib/third_party/hnswlib
 CXXFLAGS = -pthread -std=c++11 $(INCLUDES)
 OBJS = hnsw_wrapper.o
 
@@ -47,7 +47,7 @@ coverage: build
 
 # ---------- C++ compilation ----------
 
-hnsw_wrapper.o: hnsw_wrapper.h hnsw_wrapper.cc hnswlib/*.h
+hnsw_wrapper.o: hnsw_wrapper.h hnsw_wrapper.cc third_party/hnswlib/hnswlib/*.h
 	$(CXX) $(CXXFLAGS) -c hnsw_wrapper.cc
 
 libhnsw.a: $(OBJS)

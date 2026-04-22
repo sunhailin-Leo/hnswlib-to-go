@@ -5,7 +5,7 @@
 
 Go bindings for [hnswlib](https://github.com/nmslib/hnswlib) — a fast approximate nearest neighbor search library based on [Hierarchical Navigable Small World graphs](https://arxiv.org/abs/1603.09320).
 
-**hnswlib compatibility: synced with [hnswlib master](https://github.com/nmslib/hnswlib/tree/master/hnswlib).**
+**hnswlib compatibility: synced with [hnswlib v0.9.0](https://github.com/nmslib/hnswlib/releases/tag/v0.9.0) via git submodule.**
 
 ## Requirements
 

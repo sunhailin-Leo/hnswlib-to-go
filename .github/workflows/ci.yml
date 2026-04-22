@@ -49,9 +49,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          g++ -std=c++11 -I. -O2 -c hnsw_wrapper.cc
+          g++ -std=c++11 -I./third_party/hnswlib -O2 -c hnsw_wrapper.cc
           ar rcs libhnsw.a hnsw_wrapper.o
-          CGO_CXXFLAGS="-I. -std=c++11" go build
+          CGO_CXXFLAGS="-I./third_party/hnswlib -std=c++11" go build
       
       - name: Run tests (Unix)
         if: runner.os != 'Windows'
@@ -61,7 +61,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          CGO_CXXFLAGS="-I. -std=c++11" go test -v -count=1 -timeout 120s ./...
+          CGO_CXXFLAGS="-I./third_party/hnswlib -std=c++11" go test -v -count=1 -timeout 120s ./...
 
   benchmark:
     name: Benchmark
