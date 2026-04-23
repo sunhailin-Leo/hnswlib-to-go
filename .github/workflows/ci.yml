@@ -64,13 +64,13 @@ jobs:
           CGO_CXXFLAGS="-I./third_party/hnswlib -std=c++11" go test -v -count=1 -timeout 120s ./...
 
   benchmark:
-    name: Benchmark
+    name: Benchmark (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.23']
+        go: ['1.21', '1.22', '1.23', '1.24', '1.25', '1.26']
     
     steps:
       - name: Checkout code
@@ -96,7 +96,7 @@ jobs:
         run: make bench
 
   mutation:
-    name: Mutation Testing
+    name: Mutation Testing (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
     # Only run on PRs and pushes to main/master to save CI budget.
@@ -107,7 +107,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.23']
+        go: ['1.21', '1.22', '1.23', '1.24', '1.25', '1.26']
 
     steps:
       - name: Checkout code
