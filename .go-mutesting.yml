@@ -1,0 +1,25 @@
+# go-mutesting configuration for hnswlib-to-go
+#
+# Tool: https://github.com/avito-tech/go-mutesting
+# Install: go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
+#
+# Scope:
+#   - Every *.go file in the package root is mutated. Today that is only
+#     hnsw.go, but new Go files (e.g. hnsw_batch.go) are picked up
+#     automatically.
+#   - example/ is excluded via exclude_dirs below.
+#   - *_test.go files are excluded by go-mutesting automatically.
+#   - Mutator selection, test command, and exec-timeout are controlled
+#     via CLI flags in the Makefile `mutation` target.
+
+# Skip files that have no corresponding _test.go in the same package.
+skip_without_test: true
+
+# Skip files guarded by build tags in their _test.go.
+skip_with_build_tags: true
+
+# Directories excluded from mutation analysis (prefix-matched against
+# scanned paths). This prevents go-mutesting from mutating example/
+# demo code that has no test coverage.
+exclude_dirs:
+  - example

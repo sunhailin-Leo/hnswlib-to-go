@@ -5,7 +5,7 @@
 
 Go bindings for [hnswlib](https://github.com/nmslib/hnswlib) — a fast approximate nearest neighbor search library based on [Hierarchical Navigable Small World graphs](https://arxiv.org/abs/1603.09320).
 
-**hnswlib compatibility: synced with [hnswlib master](https://github.com/nmslib/hnswlib/tree/master/hnswlib).**
+**hnswlib compatibility: synced with [hnswlib v0.9.0](https://github.com/nmslib/hnswlib/releases/tag/v0.9.0) via git submodule.**
 
 ## Requirements
 
@@ -71,6 +71,15 @@ func main() {
 	defer loaded.Free()
 }
 ```
+
+### More Examples
+
+| Example | What it covers |
+|---------|---------------|
+| [`example/basic`](example/basic/main.go) | Create → Add → Search → Save → Load → Free |
+| [`example/batch`](example/batch/main.go) | `AddBatchPoints` and `SearchBatchKNN` with goroutines |
+| [`example/delete_update`](example/delete_update/main.go) | `MarkDelete`, `UnmarkDelete`, `UpdatePoint`, `UpdateBatchPoints`, `GetVectorByLabel` |
+| [`example/cosine_replace`](example/cosine_replace/main.go) | Cosine space, `SetNormalize`, `NewWithReplaceDeleted`, `AddPointWithReplace`, `ResizeIndex` |
 
 ## API Reference
 
@@ -174,19 +183,59 @@ pacman -S mingw-w64-x86_64-gcc make
 make build
 ```
 
+## Mutation Testing
+
+We use [`go-mutesting`](https://github.com/avito-tech/go-mutesting) to keep the
+test suite honest: the tool mutates `hnsw.go` (e.g. flips `+` to `-`, swaps
+`i*b` for `i/b`, negates `if` conditions) and re-runs the suite against every
+mutant. A surviving mutant points at a gap in test coverage — or an equivalent
+mutant that should be documented in the PR.
+
+```bash
+# Install once
+go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
+
+# Full run with the shared config (scope: hnsw.go only)
+make mutation
+
+# Quick ad-hoc run against hnsw.go (no config file)
+make mutation-quick
+```
+
+Scope is locked down in `.go-mutesting.yml`:
+
+- **Mutated**: all `*.go` files in the package root (today that is just
+  `hnsw.go`; new files are picked up automatically)
+- **Excluded**: `third_party/**` (upstream hnswlib), `example/**`,
+  `**/*_test.go`, `hnsw_wrapper.*` (C/C++ sources)
+- **Operators enabled**: `arithmetic/base`, `branch/case`, `branch/if`,
+  `expression/remove`, `numbers/incrementer`, `statement/remove`
+- **Test runtime**: `go test -race -short -run=^TestHNSW_`. The `-race` flag
+  is enabled so that mutants affecting goroutine synchronisation in the
+  batch APIs show up as hard failures instead of silent survivors.
+
+> ℹ️  Because every mutant triggers a CGO rebuild **and** a `-race` test
+> binary, a full run currently takes several hours on commodity hardware.
+> Prefer running it locally as a nightly / pre-release gate rather than on
+> every PR.
+
+CI runs the mutation job on Linux / Go 1.23 with `continue-on-error: true`
+until the baseline mutation score stabilizes at **≥ 70 %**. See
+[AGENTS.md § 7](AGENTS.md) for the full workflow and triage rules.
+
 ## Benchmarks
 
 Measured on Apple M3 Pro, Go 1.23, `-O3 -march=native`, dim=128, 5000 indexed vectors:
 
 | Benchmark | ns/op | B/op | allocs/op |
 |-----------|------:|-----:|----------:|
-| AddPoint (L2) | 1,805,974 | 512 | 1 |
-| AddPoint (Cosine) | 1,476,631 | 512 | 1 |
-| AddBatchPoints (1000×4 goroutines) | 2,949,077,675 | 454 | 9 |
-| SearchKNN (L2, top-10) | 119,831 | 96 | 2 |
-| SearchKNN (Cosine, top-10) | 89,467 | 96 | 2 |
-| SearchBatchKNN (100×4 goroutines) | 4,231,052 | 15,650 | 211 |
-| SaveLoad (5000 vectors) | 16,149,372 | 50 | 1 |
+| AddPoint (L2) | 1,758,072 | 0 | 0 |
+| AddPoint (Cosine) | 1,728,766 | 0 | 0 |
+| AddBatchPoints (1000×4 goroutines) | 2,375,182,522 | 530 | 9 |
+| SearchKNN (L2, top-10) | 117,636 | 96 | 2 |
+| SearchKNN (Cosine, top-10) | 86,193 | 96 | 2 |
+| SearchBatchKNN (100×4 goroutines) | 3,184,033 | 16,129 | 219 |
+| SaveLoad (5000 vectors) | 16,613,849 | 51 | 1 |
 
 Run benchmarks locally:
 

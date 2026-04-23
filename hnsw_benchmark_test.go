@@ -25,12 +25,17 @@ func BenchmarkAddPoint_L2(b *testing.B) {
 		hnsw.Free()
 	})
 
+	// Pre-generate vectors so benchRandVector alloc is excluded from measurement.
+	vectors := make([][]float32, maxElements)
+	for i := range vectors {
+		vectors[i] = benchRandVector(dim)
+	}
+
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		vec := benchRandVector(dim)
 		label := uint32(i % int(maxElements))
-		hnsw.AddPoint(vec, label)
+		hnsw.AddPoint(vectors[label], label)
 	}
 }
 
@@ -43,12 +48,17 @@ func BenchmarkAddPoint_Cosine(b *testing.B) {
 		hnsw.Free()
 	})
 
+	// Pre-generate vectors so benchRandVector alloc is excluded from measurement.
+	vectors := make([][]float32, maxElements)
+	for i := range vectors {
+		vectors[i] = benchRandVector(dim)
+	}
+
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		vec := benchRandVector(dim)
 		label := uint32(i % int(maxElements))
-		hnsw.AddPoint(vec, label)
+		hnsw.AddPoint(vectors[label], label)
 	}
 }
 
