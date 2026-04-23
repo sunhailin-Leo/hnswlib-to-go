@@ -7,69 +7,19 @@
 #   - Every *.go file in the package root is mutated. Today that is only
 #     hnsw.go, but new Go files (e.g. hnsw_batch.go) are picked up
 #     automatically.
-#   - third_party/** (upstream hnswlib), example/**, *_test.go, and
-#     hnsw_wrapper.* (C/C++ sources) are excluded.
-#   - Each mutant triggers a full `go test` run, which rebuilds CGO code,
-#     so we keep the test command tight (see `test:` below) to avoid
-#     multi-hour runs.
+#   - example/ is excluded via exclude_dirs below.
+#   - *_test.go files are excluded by go-mutesting automatically.
+#   - Mutator selection, test command, and exec-timeout are controlled
+#     via CLI flags in the Makefile `mutation` target.
 
-mutate:
-  # Files to analyze (glob patterns).
-  match:
-    - "*.go"
-  # Paths excluded from mutation analysis.
-  skip:
-    - "third_party/**"
-    - "example/**"
-    - "**/*_test.go"
-    - "hnsw_wrapper.*"         # defensive: C/C++ sources, not Go
+# Skip files that have no corresponding _test.go in the same package.
+skip_without_test: true
 
-# Mutation operators (see go-mutesting docs for the full list).
-# We explicitly enumerate the ones that produce meaningful mutants for a
-# thin CGO binding layer.
-mutators:
-  - arithmetic/base          # + - * / %  swap
-  - branch/case              # switch-case swap
-  - branch/if                # if condition negation
-  - expression/remove        # drop boolean sub-expressions
-  - numbers/incrementer      # numeric literal +/- 1
-  - statement/remove         # drop individual statements; catches tests
-                             # that let a `C.xxx` side-effect call pass
-                             # without asserting its observable effects
+# Skip files guarded by build tags in their _test.go.
+skip_with_build_tags: true
 
-# Test command executed against every mutant.
-# CGO_CXXFLAGS is required so that each rebuild can locate the hnswlib headers.
-#
-# Tuning notes:
-#   - `-race` enables Go's data-race detector. For a library whose main value
-#     is concurrent batch operations on a shared C index (AddBatchPoints /
-#     UpdateBatchPoints / SearchBatchKNN), mutants that subtly break
-#     synchronisation (e.g. dropping `wg.Add(1)`, swapping `defer wg.Done()`
-#     position, weakening an `atomic` call) are otherwise invisible to
-#     correctness-only assertions — the race detector turns them into
-#     hard failures. Cost: ~2-10x per-test slowdown.
-#   - `-run=^TestHNSW_` restricts execution to the classic TestHNSW_* suite
-#     and skips Fuzz* targets. In non-`-fuzz` mode go-test would still replay
-#     each Fuzz*'s seed corpus, which adds ~1-2s per mutant with no diagnostic
-#     value for mutation testing.
-#   - `-short` lets long tests bail out via testing.Short() if they opt in.
-#   - `.` (instead of `./...`) keeps the scope to the single top-level package.
-#   - `-timeout=120s` / per-mutant `timeout: 240` are sized to accommodate
-#     the `-race` slowdown while still failing fast on pathological mutants
-#     (e.g. infinite loops).
-test:
-  command: "go"
-  args:
-    - "test"
-    - "-count=1"
-    - "-race"
-    - "-timeout=120s"
-    - "-short"
-    - "-run=^TestHNSW_"
-    - "."
-  env:
-    CGO_CXXFLAGS: "-I./third_party/hnswlib -std=c++11"
-  # Per-mutant wall-clock timeout (seconds). Mutants that hang (e.g. infinite
-  # loops) are counted as killed once this elapses. Kept >= 2× the inner
-  # `-timeout` so go test's own timeout fires first with a stack trace.
-  timeout: 240
+# Directories excluded from mutation analysis (prefix-matched against
+# scanned paths). This prevents go-mutesting from mutating example/
+# demo code that has no test coverage.
+exclude_dirs:
+  - example

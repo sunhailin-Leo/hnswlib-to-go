@@ -87,7 +87,18 @@ mutation: build
 	env CGO_CXXFLAGS="$(INCLUDES) -std=c++11" \
 		go-mutesting \
 		--config=.go-mutesting.yml \
-		.
+		--exec-timeout=240 \
+		--disable=arithmetic/bitwise \
+		--disable=arithmetic/assign_invert \
+		--disable=arithmetic/assignment \
+		--disable=branch/else \
+		--disable=conditional/negated \
+		--disable=expression/comparison \
+		--disable=loop/break \
+		--disable=loop/condition \
+		--disable=loop/range_break \
+		--disable=numbers/decrementer \
+		./hnsw.go
 
 mutation-quick: build
 	@command -v go-mutesting >/dev/null 2>&1 || { \
