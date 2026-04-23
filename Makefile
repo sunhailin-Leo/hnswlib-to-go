@@ -87,7 +87,7 @@ mutation: build
 	env CGO_CXXFLAGS="$(INCLUDES) -std=c++11" \
 		go-mutesting \
 		--config=.go-mutesting.yml \
-		./...
+		.
 
 mutation-quick: build
 	@command -v go-mutesting >/dev/null 2>&1 || { \
