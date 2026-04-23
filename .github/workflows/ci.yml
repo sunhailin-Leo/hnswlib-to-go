@@ -94,3 +94,43 @@ jobs:
       
       - name: Run benchmarks
         run: make bench
+
+  mutation:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Only run on PRs and pushes to main/master to save CI budget.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    # Allow failure initially — mutation score is informational until the
+    # baseline stabilizes. Flip to `false` once the score is enforced.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.23']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: Install C++ compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++
+
+      - name: Install go-mutesting
+        run: go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
+
+      - name: Build (portable)
+        run: make portable
+
+      - name: Run mutation tests
+        run: make mutation

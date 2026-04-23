@@ -31,7 +31,7 @@ else
 endif
 
 # Default: optimized build with native arch
-.PHONY: all opt build clean test bench lint help
+.PHONY: all opt build clean test bench lint mutation mutation-quick help
 
 all: build
 
@@ -66,6 +66,39 @@ bench: build
 
 lint:
 	@command -v golangci-lint >/dev/null 2>&1 && golangci-lint run ./... || echo "golangci-lint not installed, skipping"
+
+# ---------- Mutation testing ----------
+# Evaluates test-suite quality by mutating hnsw.go and running the test suite
+# against each mutant. Surviving mutants indicate coverage gaps.
+#
+# Install once:
+#   go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
+#
+# Targets:
+#   make mutation        - full config-driven run (uses .go-mutesting.yml)
+#   make mutation-quick  - quick CLI run against hnsw.go only (no config file)
+
+mutation: build
+	@command -v go-mutesting >/dev/null 2>&1 || { \
+		echo "go-mutesting not installed."; \
+		echo "Install: go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest"; \
+		exit 1; \
+	}
+	env CGO_CXXFLAGS="$(INCLUDES) -std=c++11" \
+		go-mutesting \
+		--config=.go-mutesting.yml \
+		./...
+
+mutation-quick: build
+	@command -v go-mutesting >/dev/null 2>&1 || { \
+		echo "go-mutesting not installed."; \
+		echo "Install: go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest"; \
+		exit 1; \
+	}
+	env CGO_CXXFLAGS="$(INCLUDES) -std=c++11" \
+		go-mutesting \
+		--exec-timeout=180 \
+		./hnsw.go
 
 # ---------- Cross-platform builds ----------
 # These targets build the static library for specific OS/arch combinations.
@@ -117,6 +150,8 @@ help:
 	@echo "  make test               - Run unit tests"
 	@echo "  make bench              - Run benchmarks"
 	@echo "  make lint               - Run golangci-lint (if installed)"
+	@echo "  make mutation           - Run mutation testing (uses .go-mutesting.yml)"
+	@echo "  make mutation-quick     - Run mutation testing against hnsw.go only"
 	@echo "  make clean              - Remove build artifacts"
 	@echo ""
 	@echo "Cross-platform targets (require cross-compilation toolchains):"

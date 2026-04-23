@@ -21,8 +21,13 @@ This file defines the development workflow, conventions, and quality gates for *
 ├── hnsw_test.go            # unit tests
 ├── hnsw_fuzz_test.go       # fuzz tests
 ├── hnsw_benchmark_test.go  # benchmarks
-├── example/demo.go         # usage example
+├── example/
+│   ├── basic/              # basic lifecycle (create, add, search, save, load)
+│   ├── batch/              # batch add & batch search with goroutines
+│   ├── delete_update/      # soft-delete, undelete, update, vector retrieval
+│   └── cosine_replace/     # cosine space, replace-deleted mode, resize
 ├── Makefile                # build, test, bench, cross-compile targets
+├── .go-mutesting.yml       # mutation testing configuration
 ├── .github/workflows/      # CI configuration
 ├── AGENTS.md               # this file (AI agent guidelines)
 ├── CLAUDE.md               # Claude-specific prompt extensions
@@ -104,7 +109,52 @@ make bench
 
 **Pass criteria**: No significant regressions (>20% degradation) in ns/op, B/op, or allocs/op compared to the previous release.
 
-### 7. Release
+### 7. Mutation Test Verification (Recommended)
+
+Mutation testing evaluates **test-suite quality** by applying small code
+changes (mutants) to `hnsw.go` and verifying that the existing tests detect
+each change. A surviving mutant indicates a gap in test coverage or an
+equivalent mutant that should be documented.
+
+Tooling: [`go-mutesting`](https://github.com/avito-tech/go-mutesting) (avito-tech fork).
+
+```bash
+# Install once
+go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
+
+# Full run (uses .go-mutesting.yml, respects CGO env)
+make mutation
+
+# Quick run against hnsw.go only (no config file)
+make mutation-quick
+```
+
+Scope (enforced in `.go-mutesting.yml`):
+
+- **Mutated**: every `*.go` file in the package root
+  (currently only `hnsw.go`, but new Go files are picked up automatically).
+- **Excluded**: `third_party/**` (upstream), `example/**` (demo),
+  `**/*_test.go`, and `hnsw_wrapper.*` (C/C++ sources).
+- **Operators**: `arithmetic/base`, `branch/case`, `branch/if`,
+  `expression/remove`, `numbers/incrementer`, `statement/remove`.
+  `statement/remove` is intentionally enabled so that tests which let
+  `C.xxx` calls pass without asserting their side-effects are flagged.
+- **Runtime**: each mutant is validated with `go test -race -short -run=^TestHNSW_`.
+  The race detector is essential here — most of the surface area is concurrent
+  batch operations against a shared C index, so mutants that subtly break
+  synchronisation (e.g. dropping a `wg.Add(1)`) otherwise slip past
+  correctness-only assertions. Expect a ~3×–4× wall-clock increase per mutant
+  compared to a non-`-race` baseline.
+
+**Pass criteria**: Mutation score **≥ 70%** on `hnsw.go`. Every surviving
+mutant must be triaged — either a new test case is added to kill it, or the
+reason it is an equivalent mutant is recorded in the PR description.
+
+In CI, the `mutation` job currently runs with `continue-on-error: true` so
+that the score remains informational. Flip it to `false` once the baseline
+is stable.
+
+### 8. Release
 
 1. Update `CHANGELOG.md` with all changes (follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format).
 2. Update version references in `README.md` if applicable.
@@ -147,5 +197,6 @@ git commit -m "chore: update hnswlib submodule to <new-tag>"
 - [ ] Unit tests added/updated for all space types
 - [ ] Fuzz tests cover new CGO boundary code
 - [ ] Benchmarks show no significant regression
+- [ ] Mutation score ≥ 70% on `hnsw.go` (or surviving mutants justified)
 - [ ] CHANGELOG.md updated
 - [ ] CI passes on all platforms (Linux, macOS, Windows)

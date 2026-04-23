@@ -236,8 +236,35 @@ func (h *HNSW) SearchBatchKNN(vectors [][]float32, N, coroutines int) ([][]uint3
 		wg.Add(1)
 		go func(start, end int) {
 			defer wg.Done()
+
+			// Allocate one C-type buffer per goroutine and reuse it across
+			// all queries in this batch, eliminating per-query Pool get/put
+			// and reducing allocations from 2*queries to just this pair.
+			cLabels := make([]C.uint64_t, N)
+			cDists := make([]C.float, N)
+
 			for j := start; j < end; j++ {
-				labelList[j], distList[j] = h.SearchKNN(vectors[j], N)
+				vec := vectors[j]
+				if h.normalize {
+					normalizeVector(vec)
+				}
+
+				numResult := int(C.searchKnn(
+					h.index,
+					(*C.float)(unsafe.Pointer(&vec[0])),
+					C.int(N),
+					&cLabels[0],
+					&cDists[0],
+				))
+
+				labels := make([]uint32, numResult)
+				dists := make([]float32, numResult)
+				for k := 0; k < numResult; k++ {
+					labels[k] = uint32(cLabels[k])
+					dists[k] = float32(cDists[k])
+				}
+				labelList[j] = labels
+				distList[j] = dists
 			}
 		}(start, end)
 	}

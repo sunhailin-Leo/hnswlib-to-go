@@ -46,3 +46,7 @@
 *.exe
 *.out
 *.app
+
+# Mutation testing artifacts (go-mutesting)
+.mutations/
+mutation-report.*
